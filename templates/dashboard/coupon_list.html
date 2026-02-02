@@ -1,0 +1,45 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Coupons{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Coupons</h1>
+    <a href="{% url 'dashboard:coupon_create' %}" class="btn btn-dash-primary">Add coupon</a>
+  </div>
+  <div class="dashboard-card">
+    <div class="table-responsive">
+      <table class="dashboard-table table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Value</th>
+            <th>Valid</th>
+            <th>Min cart</th>
+            <th>Usage</th>
+            <th>Enabled</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in coupons %}
+            <tr>
+              <td><strong>{{ c.code }}</strong></td>
+              <td>{{ c.get_discount_type_display }}</td>
+              <td>{{ c.discount_value }}</td>
+              <td><small>{{ c.start_at|date:"M d" }} – {{ c.end_at|date:"M d, Y" }}</small></td>
+              <td>{{ c.minimum_cart_value }}</td>
+              <td>{{ c.times_used }}{% if c.usage_limit %}/{{ c.usage_limit }}{% endif %}</td>
+              <td>{% if c.is_enabled %}<span class="text-success">Yes</span>{% else %}<span class="text-muted">No</span>{% endif %}</td>
+              <td>
+                <a href="{% url 'dashboard:coupon_edit' c.id %}" class="btn btn-dash-outline btn-sm me-1">Edit</a>
+                <a href="{% url 'dashboard:coupon_toggle' c.id %}" class="btn btn-dash-outline btn-sm">{% if c.is_enabled %}Disable{% else %}Enable{% endif %}</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-muted text-center py-4">No coupons yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Orders</h1>
+    <form method="get" class="d-flex gap-2 flex-wrap align-items-center">
+      <select name="status" class="form-select" style="max-width: 180px;">
+        <option value="">All statuses</option>
+        {% for value, label in order_status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-dash-outline" type="submit">Filter</button>
+    </form>
+  </div>
+  <div class="dashboard-card">
+    <div class="table-responsive">
+      <table class="dashboard-table table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Total</th>
+            <th>Created</th>
+            <th>Coupon</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in orders %}
+            <tr>
+              <td><strong>#{{ o.id }}</strong></td>
+              <td><span class="badge-status badge-{{ o.status }}">{{ o.get_status_display }}</span></td>
+              <td>{{ o.total_amount }}</td>
+              <td>{{ o.created_at|date:"M d, Y H:i" }}</td>
+              <td>{% if o.coupon %}{{ o.coupon.code }}{% else %}—{% endif %}</td>
+              <td><a href="{% url 'dashboard:order_detail' o.id %}" class="btn btn-dash-outline btn-sm">View</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-muted text-center py-4">No orders yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

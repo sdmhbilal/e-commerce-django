@@ -1,0 +1,59 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Overview</h1>
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="stat-card primary">
+        <div class="stat-title">Products</div>
+        <div class="stat-value">{{ products_count }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card success">
+        <div class="stat-title">Orders</div>
+        <div class="stat-value">{{ orders_count }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card info">
+        <div class="stat-title">Coupons</div>
+        <div class="stat-value">{{ coupons_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="card-body">
+      <h2 class="h5 fw-bold text-dark mb-3">Recent orders</h2>
+      <div class="table-responsive">
+        <table class="dashboard-table table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for order in orders %}
+              <tr>
+                <td><strong>#{{ order.id }}</strong></td>
+                <td><span class="badge-status badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
+                <td>{{ order.total_amount }}</td>
+                <td>{{ order.created_at|date:"M d, Y H:i" }}</td>
+                <td><a class="btn btn-dash-outline btn-sm" href="{% url 'dashboard:order_detail' order.id %}">View</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="text-muted text-center py-4">No orders yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

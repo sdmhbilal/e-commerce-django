@@ -1,0 +1,146 @@
+from __future__ import annotations
+
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from rest_framework import serializers
+
+from shop.models import Cart, CartItem, Coupon, Order, OrderItem, Product
+
+User = get_user_model()
+
+
+class RegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_password(self, value: str) -> str:
+        validate_password(value)
+        return value
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data["email"],
+            password=validated_data["password"],
+        )
+        return user
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    in_stock = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "price",
+            "short_description",
+            "stock_quantity",
+            "in_stock",
+            "image_url",
+        ]
+
+    def get_image_url(self, obj: Product):
+        request = self.context.get("request")
+        if not obj.image:
+            return None
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.filter(is_active=True), source="product", write_only=True
+    )
+
+    class Meta:
+        model = CartItem
+        fields = ["id", "product", "product_id", "quantity", "unit_price", "created_at", "updated_at"]
+        read_only_fields = ["unit_price", "created_at", "updated_at"]
+
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    subtotal = serializers.SerializerMethodField()
+    total_items = serializers.SerializerMethodField()
+    cart_token = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = ["id", "cart_token", "items", "subtotal", "total_items"]
+
+    def get_subtotal(self, obj: Cart) -> Decimal:
+        return obj.subtotal()
+
+    def get_total_items(self, obj: Cart) -> int:
+        return obj.total_items()
+
+    def get_cart_token(self, obj: Cart):
+        return str(obj.guest_token) if obj.guest_token else None
+
+
+class CouponValidateSerializer(serializers.Serializer):
+    code = serializers.CharField()
+
+
+class CouponValidationResultSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    discount_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    subtotal_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class OrderCreateSerializer(serializers.Serializer):
+    coupon_code = serializers.CharField(required=False, allow_blank=True)
+    guest_full_name = serializers.CharField(required=False, allow_blank=True)
+    guest_email = serializers.EmailField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.is_authenticated:
+            if not attrs.get("guest_full_name") or not attrs.get("guest_email"):
+                raise serializers.ValidationError("Guest checkout requires full name and email.")
+        return attrs
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "quantity", "unit_price", "line_total"]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    coupon_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "status",
+            "guest_full_name",
+            "guest_email",
+            "coupon_code",
+            "subtotal_amount",
+            "discount_amount",
+            "total_amount",
+            "items",
+            "created_at",
+        ]
+
+    def get_coupon_code(self, obj: Order):
+        return obj.coupon.code if obj.coupon else None
+

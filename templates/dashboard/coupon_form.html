@@ -1,0 +1,79 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <div class="page-header flex-wrap">
+    <h1>{{ title }}</h1>
+    <a href="{% url 'dashboard:coupon_list' %}" class="btn btn-dash-outline">Cancel</a>
+  </div>
+  <div class="dashboard-card">
+    <div class="card-body">
+      <form method="post" class="dashboard-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <p class="mb-1">{{ form.code.label_tag }}</p>
+            {{ form.code }}
+            {% if form.code.help_text %}<p class="helptext">{{ form.code.help_text }}</p>{% endif %}
+            {{ form.code.errors }}
+          </div>
+        </div>
+        <div class="mb-3 mt-3">
+          <p class="mb-2 fw-500">{{ form.discount_type.label }}</p>
+          <div class="dash-radio-group">
+            {{ form.discount_type }}
+          </div>
+          <p class="small text-muted mb-0">Flat = fixed amount off. Percentage = % off cart.</p>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <p class="mb-1">{{ form.discount_value.label_tag }}</p>
+            {{ form.discount_value }}
+            {% if form.discount_value.help_text %}<p class="helptext">{{ form.discount_value.help_text }}</p>{% endif %}
+            {{ form.discount_value.errors }}
+          </div>
+          <div class="col-md-4">
+            <p class="mb-1">{{ form.minimum_cart_value.label_tag }}</p>
+            {{ form.minimum_cart_value }}
+            {{ form.minimum_cart_value.errors }}
+          </div>
+          <div class="col-md-4">
+            <p class="mb-1">{{ form.usage_limit.label_tag }}</p>
+            {{ form.usage_limit }}
+            {{ form.usage_limit.errors }}
+          </div>
+        </div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <p class="mb-1">{{ form.start_at.label_tag }}</p>
+            {{ form.start_at }}
+            {% if form.start_at.help_text %}<p class="helptext">{{ form.start_at.help_text }}</p>{% endif %}
+            {{ form.start_at.errors }}
+          </div>
+          <div class="col-md-6">
+            <p class="mb-1">{{ form.end_at.label_tag }}</p>
+            {{ form.end_at }}
+            {% if form.end_at.help_text %}<p class="helptext">{{ form.end_at.help_text }}</p>{% endif %}
+            {{ form.end_at.errors }}
+          </div>
+        </div>
+        <div class="mb-3 mt-3">
+          <p class="mb-1">{{ form.applicable_products.label_tag }}</p>
+          {{ form.applicable_products }}
+          <p class="helptext mb-0">Leave none selected to apply coupon to all products. Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</p>
+          {{ form.applicable_products.errors }}
+        </div>
+        <div class="mb-3">
+          <div class="d-flex align-items-center gap-2">
+            {{ form.is_enabled }}
+            <label for="{{ form.is_enabled.id_for_label }}" class="mb-0">{{ form.is_enabled.label }}</label>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-dash-primary" type="submit">Save</button>
+          <a href="{% url 'dashboard:coupon_list' %}" class="btn btn-dash-outline">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

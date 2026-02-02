@@ -1,0 +1,62 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <div class="page-header flex-wrap">
+    <h1>{{ title }}</h1>
+    <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
+  </div>
+  <div class="dashboard-card">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" class="dashboard-form" id="product-form">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="mb-4" id="image-preview-wrap">
+          <label class="form-label fw-500">Image preview</label>
+          <p class="small text-muted mb-2">Select an image above to see a preview. Accepted: JPG, PNG, GIF, WebP.</p>
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+            {% if form.instance.pk and form.instance.image %}
+              <div class="existing-image" id="existing-image-wrap">
+                <p class="small text-muted mb-1">Current image</p>
+                <img src="{{ form.instance.image.url }}" alt="Current" class="img-thumbnail dash-product-thumb" id="existing-image">
+              </div>
+            {% endif %}
+            <div id="new-preview-wrap" style="display: none;">
+              <p class="small text-muted mb-1">New image</p>
+              <img id="image-preview" src="" alt="Preview" class="img-thumbnail dash-product-thumb">
+            </div>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-dash-primary" type="submit">Save</button>
+          <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (function() {
+      var input = document.querySelector('input[name=image]');
+      var newWrap = document.getElementById('new-preview-wrap');
+      var newImg = document.getElementById('image-preview');
+      var existingImg = document.getElementById('existing-image');
+      if (!input) return;
+      input.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (file && file.type.indexOf('image/') === 0) {
+          newImg.src = URL.createObjectURL(file);
+          newWrap.style.display = 'block';
+          var wrap = document.getElementById('existing-image-wrap');
+          if (wrap) wrap.style.display = 'none';
+        } else {
+          newWrap.style.display = 'none';
+          newImg.src = '';
+          var wrap = document.getElementById('existing-image-wrap');
+          if (wrap) wrap.style.display = 'block';
+        }
+      });
+    })();
+  </script>
+{% endblock %}

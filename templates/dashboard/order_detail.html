@@ -1,0 +1,58 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Order #{{ order.id }}{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Order #{{ order.id }}</h1>
+    <div>
+      <a href="{% url 'dashboard:order_update_status' order.id %}" class="btn btn-dash-primary me-2">Update status</a>
+      <a href="{% url 'dashboard:order_list' %}" class="btn btn-dash-outline">Back to orders</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="dashboard-card">
+        <div class="card-body">
+          <h2 class="h5 fw-bold text-dark mb-3">Items</h2>
+          <div class="table-responsive">
+            <table class="dashboard-table table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Unit price</th>
+                  <th>Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in order.items.all %}
+                  <tr>
+                    <td>{{ item.product.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit_price }}</td>
+                    <td>{{ item.line_total }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="dashboard-card">
+        <div class="card-body">
+          <h2 class="h5 fw-bold text-dark mb-3">Summary</h2>
+          <p class="mb-2"><span class="text-muted">Status</span> <span class="badge-status badge-{{ order.status }} ms-2">{{ order.get_status_display }}</span></p>
+          <p class="mb-2"><span class="text-muted">Subtotal</span> <strong class="float-end">{{ order.subtotal_amount }}</strong></p>
+          <p class="mb-2"><span class="text-muted">Discount</span> <strong class="float-end">{{ order.discount_amount }}</strong></p>
+          <p class="mb-3 pt-2 border-top"><span class="text-muted">Total</span> <strong class="float-end fs-5">{{ order.total_amount }}</strong></p>
+          <p class="mb-1 small text-muted">Customer</p>
+          <p class="mb-3">{% if order.user %}{{ order.user.username }} ({{ order.user.email }}){% else %}{{ order.guest_full_name }} ({{ order.guest_email }}){% endif %}</p>
+          <p class="mb-1 small text-muted">Coupon</p>
+          <p class="mb-0">{% if order.coupon %}{{ order.coupon.code }}{% else %}—{% endif %}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

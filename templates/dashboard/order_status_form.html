@@ -1,0 +1,25 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Update order status{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Update status — Order #{{ order.id }}</h1>
+    <a href="{% url 'dashboard:order_detail' order.id %}" class="btn btn-dash-outline">Cancel</a>
+  </div>
+  <div class="dashboard-card">
+    <div class="card-body">
+      <form method="post" class="dashboard-form">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-500">Status</label>
+          <select name="status" class="form-select" style="max-width: 200px;">
+            {% for value, label in order.Status.choices %}
+              <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-dash-primary" type="submit">Save</button>
+        <a href="{% url 'dashboard:order_detail' order.id %}" class="btn btn-dash-outline ms-2">Cancel</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}
