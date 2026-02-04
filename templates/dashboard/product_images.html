@@ -1,0 +1,53 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Images: {{ product.name }}{% endblock %}
+{% block content %}
+  <div class="page-header flex-wrap">
+    <h1>Images: {{ product.name }}</h1>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{% url 'dashboard:product_edit' product.pk %}" class="btn btn-dash-outline">Edit product</a>
+      <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Back to products</a>
+    </div>
+  </div>
+  <div class="dashboard-card mb-4">
+    <div class="card-body">
+      <h2 class="h6 fw-500 mb-3">Add more images</h2>
+      <form method="post" action="{% url 'dashboard:product_images_upload' product.pk %}" enctype="multipart/form-data" class="d-flex flex-wrap align-items-end gap-3">
+        {% csrf_token %}
+        <div class="flex-grow-1">
+          <input type="file" name="images" accept="image/*" multiple class="form-control">
+          <p class="small text-muted mt-1">Select one or more images. JPG, PNG, GIF, WebP.</p>
+        </div>
+        <button type="submit" class="btn btn-dash-primary">Upload</button>
+      </form>
+    </div>
+  </div>
+  <div class="dashboard-card">
+    <div class="card-body">
+      <h2 class="h6 fw-500 mb-3">Product images (buyers see all of these)</h2>
+      {% if images %}
+        <div class="row g-3">
+          {% for img in images %}
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="border rounded p-2 h-100 d-flex flex-column">
+                <img src="{{ img.image.url }}" alt="Product image" class="img-fluid rounded mb-2" style="object-fit: cover; height: 140px; width: 100%;">
+                <div class="mt-auto d-flex flex-wrap gap-1">
+                  {% if img.is_cover %}
+                    <span class="badge bg-primary">Cover</span>
+                  {% else %}
+                    <a href="{% url 'dashboard:product_image_set_cover' product.pk img.pk %}" class="btn btn-sm btn-outline-primary">Set as cover</a>
+                  {% endif %}
+                  <form method="post" action="{% url 'dashboard:product_image_delete' product.pk img.pk %}" class="d-inline" onsubmit="return confirm('Remove this image?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No images yet. Upload above or set a cover image on the product edit form.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

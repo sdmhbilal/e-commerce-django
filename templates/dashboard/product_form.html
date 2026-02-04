@@ -3,7 +3,12 @@
 {% block content %}
   <div class="page-header flex-wrap">
     <h1>{{ title }}</h1>
-    <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
+    <div class="d-flex flex-wrap gap-2">
+      {% if form.instance.pk %}
+        <a href="{% url 'dashboard:product_images' form.instance.pk %}" class="btn btn-dash-outline">Manage images</a>
+      {% endif %}
+      <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
+    </div>
   </div>
   <div class="dashboard-card">
     <div class="card-body">
@@ -14,10 +19,10 @@
           <label class="form-label fw-500">Image preview</label>
           <p class="small text-muted mb-2">Select an image above to see a preview. Accepted: JPG, PNG, GIF, WebP.</p>
           <div class="d-flex align-items-start gap-3 flex-wrap">
-            {% if form.instance.pk and form.instance.image %}
+            {% if form.instance.pk and form.instance.get_cover_image %}
               <div class="existing-image" id="existing-image-wrap">
-                <p class="small text-muted mb-1">Current image</p>
-                <img src="{{ form.instance.image.url }}" alt="Current" class="img-thumbnail dash-product-thumb" id="existing-image">
+                <p class="small text-muted mb-1">Current cover</p>
+                <img src="{{ form.instance.get_cover_image.url }}" alt="Current cover" class="img-thumbnail dash-product-thumb" id="existing-image">
               </div>
             {% endif %}
             <div id="new-preview-wrap" style="display: none;">

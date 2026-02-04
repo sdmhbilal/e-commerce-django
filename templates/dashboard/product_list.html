@@ -23,11 +23,13 @@
           {% for product in products %}
             <tr>
               <td>
-                {% if product.image %}
-                  <img src="{{ product.image.url }}" alt="{{ product.name }}" class="dash-product-thumb-list">
-                {% else %}
-                  <span class="text-muted small">—</span>
-                {% endif %}
+                {% with cover=product.get_cover_image %}
+                  {% if cover %}
+                    <img src="{{ cover.url }}" alt="{{ product.name }}" class="dash-product-thumb-list">
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                {% endwith %}
               </td>
               <td>{{ product.id }}</td>
               <td><strong>{{ product.name }}</strong></td>
@@ -37,6 +39,7 @@
               <td>
                 <div class="btn-group-actions">
                   <a href="{% url 'dashboard:product_edit' product.id %}" class="btn btn-dash-outline btn-sm me-1">Edit</a>
+                  <a href="{% url 'dashboard:product_images' product.id %}" class="btn btn-dash-outline btn-sm me-1">Images</a>
                   <a href="{% url 'dashboard:product_delete' product.id %}" class="btn btn-dash-danger btn-sm">Delete</a>
                 </div>
               </td>

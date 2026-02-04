@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from shop.models import Cart, CartItem, Coupon, Order, OrderItem, Product
+from shop.models import Cart, CartItem, Coupon, Order, OrderItem, Product, ProductImage
 
 User = get_user_model()
 
@@ -14,7 +14,19 @@ User = get_user_model()
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150, required=True, allow_blank=False)
+    last_name = serializers.CharField(max_length=150, required=True, allow_blank=False)
     password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_username(self, value: str) -> str:
+        if User.objects.filter(username__iexact=value.strip()).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value.strip()
+
+    def validate_email(self, value: str) -> str:
+        if User.objects.filter(email__iexact=value.strip().lower()).exists():
+            raise serializers.ValidationError("A user with this email is already registered.")
+        return value.strip().lower()
 
     def validate_password(self, value: str) -> str:
         validate_password(value)
@@ -25,8 +37,27 @@ class RegisterSerializer(serializers.Serializer):
             username=validated_data["username"],
             email=validated_data["email"],
             password=validated_data["password"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            is_active=False,
         )
         return user
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=10)
+
+
+class VerifyEmailChangeSerializer(serializers.Serializer):
+    new_email = serializers.EmailField()
+    otp = serializers.CharField(max_length=10)
+
+
+class ProfileUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -34,8 +65,27 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
+def _build_image_url(request, image_field):
+    if not image_field:
+        return None
+    url = image_field.url
+    return request.build_absolute_uri(url) if request else url
+
+
+class ProductImageSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    is_cover = serializers.BooleanField(read_only=True)
+    order = serializers.IntegerField(read_only=True)
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        return _build_image_url(request, obj.image if hasattr(obj, "image") else None)
+
+
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     in_stock = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -48,14 +98,28 @@ class ProductSerializer(serializers.ModelSerializer):
             "stock_quantity",
             "in_stock",
             "image_url",
+            "images",
         ]
 
     def get_image_url(self, obj: Product):
+        """Cover image URL: from ProductImage (cover or first) or legacy Product.image."""
         request = self.context.get("request")
-        if not obj.image:
-            return None
-        url = obj.image.url
-        return request.build_absolute_uri(url) if request else url
+        cover_image = obj.get_cover_image()
+        return _build_image_url(request, cover_image)
+
+    def get_images(self, obj: Product):
+        """All product images (cover + others) for buyer to view."""
+        qs = obj.images.all()
+        if not qs.exists() and obj.image:
+            return [
+                {
+                    "id": 0,
+                    "image_url": _build_image_url(self.context.get("request"), obj.image),
+                    "is_cover": True,
+                    "order": 0,
+                }
+            ]
+        return ProductImageSerializer(qs, many=True, context=self.context).data
 
 
 class CartItemSerializer(serializers.ModelSerializer):

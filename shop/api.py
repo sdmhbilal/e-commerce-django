@@ -1,17 +1,31 @@
 from __future__ import annotations
 
+import random
+import string
 from decimal import Decimal
 
 from django.conf import settings
-from django.contrib.auth import authenticate
-from django.db import transaction
+from django.contrib.auth import authenticate, get_user_model
+from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from shop.models import Cart, CartItem, Coupon, Product, create_order_from_cart
+from shop.models import (
+    Cart,
+    CartItem,
+    Coupon,
+    EmailChangeRequest,
+    EmailVerificationCode,
+    Order,
+    Product,
+    UserProfile,
+    create_order_from_cart,
+)
 from shop.serializers import (
     CartItemSerializer,
     CartSerializer,
@@ -21,8 +35,14 @@ from shop.serializers import (
     OrderCreateSerializer,
     OrderSerializer,
     ProductSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
+    VerifyEmailSerializer,
+    VerifyEmailChangeSerializer,
 )
+
+User = get_user_model()
+OTP_EXPIRE_MINUTES = getattr(settings, "OTP_EXPIRE_MINUTES", 15)
 
 
 def _min_order_amount() -> Decimal:
@@ -33,14 +53,49 @@ def _min_order_amount() -> Decimal:
         return Decimal("0.00")
 
 
+def _merge_guest_cart_into_user_cart(user_cart: Cart, guest_cart: Cart) -> None:
+    """Move all items from guest_cart into user_cart; same product adds quantity."""
+    for guest_item in guest_cart.items.select_related("product").all():
+        existing = user_cart.items.filter(product=guest_item.product).first()
+        if existing:
+            existing.quantity += guest_item.quantity
+            existing.unit_price = guest_item.product.price
+            existing.save(update_fields=["quantity", "unit_price", "updated_at"])
+        else:
+            CartItem.objects.create(
+                cart=user_cart,
+                product=guest_item.product,
+                quantity=guest_item.quantity,
+                unit_price=guest_item.product.price,
+            )
+    guest_cart.items.all().delete()
+
+
 def _get_or_create_cart(request) -> Cart:
     """
-    Authenticated: single active cart per user (checked_out_at is null)
+    Authenticated: single active cart per user (checked_out_at is null).
+    If user's cart is empty and request has X-Cart-Token with a guest cart that has items,
+    merge guest cart into user's cart so "Place order" after login works.
     Guest: use X-Cart-Token header (UUID). If missing, create new guest cart.
     """
     if request.user.is_authenticated:
-        cart, _ = Cart.objects.get_or_create(user=request.user, checked_out_at__isnull=True)
-        return cart
+        user_cart, _ = Cart.objects.get_or_create(
+            user=request.user, checked_out_at__isnull=True
+        )
+        if user_cart.total_items() == 0:
+            token = request.headers.get("X-Cart-Token") or request.query_params.get(
+                "cart_token"
+            )
+            if token:
+                try:
+                    guest_cart = Cart.objects.get(
+                        guest_token=token, checked_out_at__isnull=True
+                    )
+                    if guest_cart.total_items() > 0:
+                        _merge_guest_cart_into_user_cart(user_cart, guest_cart)
+                except Cart.DoesNotExist:
+                    pass
+        return user_cart
 
     token = request.headers.get("X-Cart-Token") or request.query_params.get("cart_token")
     if token:
@@ -51,12 +106,130 @@ def _get_or_create_cart(request) -> Cart:
     return Cart.objects.create()
 
 
+def _send_otp_email(email: str, otp: str):
+    subject = "Your verification code"
+    message = f"Your OTP for account verification is: {otp}\n\nIt is valid for {OTP_EXPIRE_MINUTES} minutes."
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com")
+    send_mail(subject, message, from_email, [email], fail_silently=False)
+
+
+def _send_email_change_otp(new_email: str, otp: str):
+    subject = "Verify your new email address"
+    message = (
+        f"Your code to confirm your new email address is: {otp}\n\n"
+        f"It is valid for {OTP_EXPIRE_MINUTES} minutes."
+    )
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com")
+    send_mail(subject, message, from_email, [new_email], fail_silently=False)
+
+
+def _profile_response(user, request=None):
+    """Build auth profile dict with optional avatar_url."""
+    data = {
+        "id": user.id,
+        "username": user.get_username(),
+        "email": user.email or "",
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+    }
+    try:
+        profile = user.shop_profile
+        if profile.avatar:
+            url = profile.avatar.url
+            data["avatar_url"] = request.build_absolute_uri(url) if request else url
+        else:
+            data["avatar_url"] = None
+    except UserProfile.DoesNotExist:
+        data["avatar_url"] = None
+    return data
+
+
+def _send_order_confirmation_email(order):
+    to_email = order.user.email if order.user else order.guest_email
+    if not to_email:
+        return
+    subject = f"Order #{order.id} confirmed"
+    lines = [
+        f"Thank you for your order #{order.id}.",
+        f"Status: {order.status}",
+        f"Subtotal: {order.subtotal_amount}",
+        f"Discount: {order.discount_amount}",
+        f"Total: {order.total_amount}",
+    ]
+    for item in order.items.select_related("product").all():
+        lines.append(f"  - {item.product.name} x {item.quantity}: {item.line_total}")
+    message = "\n".join(lines)
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com")
+    send_mail(subject, message, from_email, [to_email], fail_silently=True)
+
+
+def send_order_status_change_email(order: Order) -> None:
+    """Send email to customer when admin changes order status (e.g. shipped, cancelled)."""
+    to_email = order.user.email if order.user else order.guest_email
+    if not to_email or not to_email.strip():
+        return
+    status_display = dict(Order.Status.choices).get(order.status, order.status)
+    subject = f"Order #{order.id} – status updated to {status_display}"
+    lines = [
+        f"Your order #{order.id} has been updated.",
+        f"New status: {status_display}",
+        f"Total: PKR {order.total_amount}",
+    ]
+    message = "\n".join(lines)
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com")
+    send_mail(subject, message, from_email, [to_email.strip()], fail_silently=True)
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
     s = RegisterSerializer(data=request.data)
     s.is_valid(raise_exception=True)
-    user = s.save()
+    try:
+        user = s.save()
+    except IntegrityError:
+        return Response(
+            {"detail": "A user with this username or email already exists."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    rec = EmailVerificationCode.create_for_email(user.email)
+    try:
+        _send_otp_email(user.email, rec.code)
+    except Exception:
+        rec.delete()
+        user.delete()
+        return Response(
+            {"detail": "Failed to send verification email. Check email configuration."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response({
+        "message": "Check your email for the verification code (OTP).",
+        "email": user.email,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def verify_email(request):
+    s = VerifyEmailSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    email = s.validated_data["email"].strip().lower()
+    otp = s.validated_data["otp"].strip()
+    try:
+        rec = EmailVerificationCode.objects.get(email__iexact=email, code=otp)
+    except EmailVerificationCode.DoesNotExist:
+        return Response({"detail": "Invalid or expired code."}, status=status.HTTP_400_BAD_REQUEST)
+    delta = timezone.now() - rec.created_at
+    if delta.total_seconds() > OTP_EXPIRE_MINUTES * 60:
+        rec.delete()
+        return Response({"detail": "Code expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+    user = User.objects.filter(email__iexact=email).first()
+    if not user:
+        rec.delete()
+        return Response({"detail": "User not found."}, status=status.HTTP_400_BAD_REQUEST)
+    user.is_active = True
+    user.save(update_fields=["is_active"])
+    rec.delete()
     token, _ = Token.objects.get_or_create(user=user)
     return Response({"token": token.key})
 
@@ -69,6 +242,11 @@ def login(request):
     user = authenticate(username=s.validated_data["username"], password=s.validated_data["password"])
     if not user:
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+    if not user.is_active:
+        return Response(
+            {"detail": "Account not verified. Please verify your email first."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     token, _ = Token.objects.get_or_create(user=user)
     return Response({"token": token.key})
 
@@ -78,6 +256,15 @@ def login(request):
 def products_list(request):
     qs = Product.objects.filter(is_active=True).order_by("id")
     return Response(ProductSerializer(qs, many=True, context={"request": request}).data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def product_detail(request, product_id: int):
+    product = Product.objects.filter(is_active=True, id=product_id).first()
+    if not product:
+        return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+    return Response(ProductSerializer(product, context={"request": request}).data)
 
 
 @api_view(["GET"])
@@ -181,6 +368,21 @@ def coupon_validate(request):
     return Response(data)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def order_list(request):
+    """List all orders for the authenticated user (past orders)."""
+    qs = (
+        Order.objects.filter(user=request.user)
+        .select_related("coupon")
+        .prefetch_related("items__product")
+        .order_by("-created_at")
+    )
+    return Response(
+        OrderSerializer(qs, many=True, context={"request": request}).data
+    )
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def order_create(request):
@@ -208,11 +410,113 @@ def order_create(request):
     except ValueError as e:
         return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    try:
+        _send_order_confirmation_email(order)
+    except Exception:
+        pass
+
     return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
-    return Response({"id": request.user.id, "username": request.user.get_username(), "email": request.user.email})
+    return Response(_profile_response(request.user, request))
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def profile_update(request):
+    s = ProfileUpdateSerializer(data=request.data, partial=True)
+    s.is_valid(raise_exception=True)
+    user = request.user
+    # Always update first_name / last_name when provided
+    if "first_name" in s.validated_data:
+        user.first_name = (s.validated_data["first_name"] or "").strip()
+    if "last_name" in s.validated_data:
+        user.last_name = (s.validated_data["last_name"] or "").strip()
+    new_email = (s.validated_data.get("email") or "").strip().lower()
+    if new_email and new_email != (user.email or "").strip().lower():
+        # Email change: require verification via OTP to new email
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response(
+                {"detail": "A user with this email already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        EmailChangeRequest.objects.filter(user=user).delete()
+        code = "".join(random.choices(string.digits, k=6))
+        req = EmailChangeRequest.objects.create(user=user, new_email=new_email, code=code)
+        try:
+            _send_email_change_otp(req.new_email, req.code)
+        except Exception:
+            req.delete()
+            return Response(
+                {"detail": "Failed to send verification email. Try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        user.save(update_fields=["first_name", "last_name"])
+        return Response({
+            **_profile_response(user, request),
+            "pending_email": new_email,
+            "message": "Check your new email for the verification code.",
+        })
+    user.save(update_fields=["first_name", "last_name"])
+    return Response(_profile_response(user, request))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_email_change(request):
+    s = VerifyEmailChangeSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    new_email = s.validated_data["new_email"].strip().lower()
+    otp = s.validated_data["otp"].strip()
+    user = request.user
+    try:
+        req = EmailChangeRequest.objects.get(user=user, new_email__iexact=new_email, code=otp)
+    except EmailChangeRequest.DoesNotExist:
+        return Response(
+            {"detail": "Invalid or expired code."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    delta = timezone.now() - req.created_at
+    if delta.total_seconds() > OTP_EXPIRE_MINUTES * 60:
+        req.delete()
+        return Response(
+            {"detail": "Code expired. Request a new email change."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    user.email = new_email
+    user.save(update_fields=["email"])
+    req.delete()
+    return Response(_profile_response(user, request))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def profile_avatar_upload(request):
+    avatar = request.FILES.get("avatar")
+    if not avatar:
+        return Response(
+            {"detail": "No avatar file provided."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    # Basic content-type check
+    if not avatar.content_type.startswith("image/"):
+        return Response(
+            {"detail": "File must be an image."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.avatar = avatar
+    profile.save(update_fields=["avatar"])
+    return Response(_profile_response(request.user, request))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    """Invalidate the auth token for the current user."""
+    Token.objects.filter(user=request.user).delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 

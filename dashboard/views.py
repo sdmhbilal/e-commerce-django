@@ -4,10 +4,12 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from shop.models import Coupon, Order, Product
+from shop.api import send_order_status_change_email
+from shop.models import Coupon, Order, Product, ProductImage
 
 
 def staff_required(view_func):
@@ -189,9 +191,17 @@ def product_edit(request, pk: int):
     form = ProductForm(request.POST or None, request.FILES or None, instance=product)
     if request.method == "POST" and form.is_valid():
         form.save()
+        if form.cleaned_data.get("image"):
+            ProductImage.objects.filter(product=product).update(is_cover=False)
+            ProductImage.objects.create(
+                product=product,
+                image=form.cleaned_data["image"],
+                is_cover=True,
+                order=product.images.count(),
+            )
         messages.success(request, "Product updated.")
         return redirect("dashboard:product_list")
-    return render(request, "dashboard/product_form.html", {"form": form, "title": "Edit product"})
+    return render(request, "dashboard/product_form.html", {"form": form, "title": "Edit product", "product": product})
 
 
 @staff_required
@@ -202,6 +212,69 @@ def product_delete(request, pk: int):
         messages.success(request, "Product deleted.")
         return redirect("dashboard:product_list")
     return render(request, "dashboard/product_confirm_delete.html", {"product": product})
+
+
+@staff_required
+def product_images(request, pk: int):
+    product = get_object_or_404(Product, pk=pk)
+    images = product.images.all()
+    return render(
+        request,
+        "dashboard/product_images.html",
+        {"product": product, "images": images},
+    )
+
+
+@staff_required
+def product_images_upload(request, pk: int):
+    product = get_object_or_404(Product, pk=pk)
+    if request.method != "POST":
+        return redirect("dashboard:product_images", pk=pk)
+    files = request.FILES.getlist("images")
+    if not files:
+        messages.warning(request, "No images selected.")
+        return redirect("dashboard:product_images", pk=pk)
+    next_order = product.images.aggregate(models.Max("order"))["order__max"]
+    next_order = (next_order or -1) + 1
+    had_images = product.images.exists()
+    for f in files:
+        if f.content_type and f.content_type.startswith("image/"):
+            ProductImage.objects.create(
+                product=product,
+                image=f,
+                is_cover=not had_images,
+                order=next_order,
+            )
+            had_images = True
+            next_order += 1
+    messages.success(request, f"Added {len(files)} image(s).")
+    return redirect("dashboard:product_images", pk=pk)
+
+
+@staff_required
+def product_image_set_cover(request, pk: int, image_pk: int):
+    product = get_object_or_404(Product, pk=pk)
+    img = get_object_or_404(ProductImage, pk=image_pk, product=product)
+    product.images.update(is_cover=False)
+    img.is_cover = True
+    img.save(update_fields=["is_cover"])
+    messages.success(request, "Cover photo updated.")
+    return redirect("dashboard:product_images", pk=pk)
+
+
+@staff_required
+def product_image_delete(request, pk: int, image_pk: int):
+    product = get_object_or_404(Product, pk=pk)
+    img = get_object_or_404(ProductImage, pk=image_pk, product=product)
+    was_cover = img.is_cover
+    img.delete()
+    if was_cover:
+        first = product.images.order_by("order", "id").first()
+        if first:
+            first.is_cover = True
+            first.save(update_fields=["is_cover"])
+    messages.success(request, "Image removed.")
+    return redirect("dashboard:product_images", pk=pk)
 
 
 @staff_required
@@ -266,7 +339,8 @@ def order_update_status(request, pk: int):
         if new_status in dict(Order.Status.choices):
             order.status = new_status
             order.save(update_fields=["status"])
-            messages.success(request, "Order status updated.")
+            send_order_status_change_email(order)
+            messages.success(request, "Order status updated and customer notified by email.")
         return redirect("dashboard:order_detail", pk=order.pk)
     return render(request, "dashboard/order_status_form.html", {"order": order})
 

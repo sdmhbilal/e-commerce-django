@@ -78,8 +78,25 @@ python manage.py runserver
 ```
 
 - **API base:** `http://localhost:8000/api/`
-- **Admin dashboard:** `http://localhost:8000/dashboard/` (staff login required)
-- **Django admin:** `http://localhost:8000/admin/`
+- **E‑commerce admin dashboard (assignment’s admin):** `http://localhost:8000/dashboard/` — use this for products, orders, coupons (Jinja templates; staff login).
+- **Django built‑in admin:** `http://localhost:8000/admin/` — optional; not the assignment’s admin. See **DASHBOARD_ACCESS.md** for exact dashboard URLs (add product, orders, coupons).
+
+### Accessing admin (first time)
+
+No admin user exists until you create one. Create a **superuser** (works for both Django admin and the custom dashboard):
+
+```bash
+python manage.py createsuperuser
+```
+
+Enter username, email, and password when prompted. Then:
+
+| What | URL | Login |
+|------|-----|--------|
+| **Custom dashboard** (products, coupons, orders) | http://localhost:8000/dashboard/ | Same username/password (must be staff; superuser is staff) |
+| **Django admin** (full DB/admin) | http://localhost:8000/admin/ | Same username/password |
+
+If you used the one-time setup script that created a default superuser, use **username:** `admin`, **password:** `admin123` (change in production).
 
 ## Admin Dashboard
 

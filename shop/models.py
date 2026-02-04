@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import string
 import uuid
 from decimal import Decimal
 
@@ -7,6 +9,52 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
+
+
+def _generate_otp(length=6):
+    return "".join(random.choices(string.digits, k=length))
+
+
+class EmailVerificationCode(models.Model):
+    """OTP for email verification on signup."""
+    email = models.EmailField()
+    code = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["email"])]
+        ordering = ["-created_at"]
+
+    @staticmethod
+    def create_for_email(email):
+        code = _generate_otp(6)
+        EmailVerificationCode.objects.filter(email__iexact=email).delete()
+        return EmailVerificationCode.objects.create(email=email, code=code)
+
+
+class EmailChangeRequest(models.Model):
+    """OTP for verifying a user's new email before updating."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_change_requests"
+    )
+    new_email = models.EmailField()
+    code = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "new_email"])]
+        ordering = ["-created_at"]
+
+
+class UserProfile(models.Model):
+    """Extended profile for user (e.g. avatar)."""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shop_profile"
+    )
+    avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+
+    class Meta:
+        db_table = "shop_userprofile"
 
 
 class TimestampedModel(models.Model):
@@ -31,6 +79,35 @@ class Product(TimestampedModel):
     @property
     def in_stock(self) -> bool:
         return self.stock_quantity > 0
+
+    def get_cover_image(self):
+        """Cover = first ProductImage with is_cover=True, else first by order, else legacy Product.image."""
+        cover = self.images.filter(is_cover=True).first()
+        if cover:
+            return cover.image
+        first = self.images.order_by("order", "id").first()
+        if first:
+            return first.image
+        return self.image
+
+
+class ProductImage(models.Model):
+    """Multiple images per product; one can be the cover."""
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="images"
+    )
+    image = models.ImageField(upload_to="products/")
+    is_cover = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        db_table = "shop_productimage"
+
+    def save(self, *args, **kwargs):
+        if self.is_cover:
+            self.product.images.exclude(pk=self.pk).update(is_cover=False)
+        super().save(*args, **kwargs)
 
 
 class Coupon(TimestampedModel):
