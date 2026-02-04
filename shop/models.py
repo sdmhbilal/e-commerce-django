@@ -16,7 +16,6 @@ def _generate_otp(length=6):
 
 
 class EmailVerificationCode(models.Model):
-    """OTP for email verification on signup."""
     email = models.EmailField()
     code = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,7 +32,6 @@ class EmailVerificationCode(models.Model):
 
 
 class EmailChangeRequest(models.Model):
-    """OTP for verifying a user's new email before updating."""
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_change_requests"
     )
@@ -47,7 +45,6 @@ class EmailChangeRequest(models.Model):
 
 
 class UserProfile(models.Model):
-    """Extended profile for user (e.g. avatar)."""
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shop_profile"
     )
@@ -81,18 +78,10 @@ class Product(TimestampedModel):
         return self.stock_quantity > 0
 
     def get_cover_image(self):
-        """Cover = first ProductImage with is_cover=True, else first by order, else legacy Product.image."""
-        cover = self.images.filter(is_cover=True).first()
-        if cover:
-            return cover.image
-        first = self.images.order_by("order", "id").first()
-        if first:
-            return first.image
         return self.image
 
 
 class ProductImage(models.Model):
-    """Multiple images per product; one can be the cover."""
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, related_name="images"
     )
@@ -103,11 +92,6 @@ class ProductImage(models.Model):
     class Meta:
         ordering = ["order", "id"]
         db_table = "shop_productimage"
-
-    def save(self, *args, **kwargs):
-        if self.is_cover:
-            self.product.images.exclude(pk=self.pk).update(is_cover=False)
-        super().save(*args, **kwargs)
 
 
 class Coupon(TimestampedModel):
@@ -151,7 +135,6 @@ class Coupon(TimestampedModel):
         if subtotal < self.minimum_cart_value:
             return False, "Minimum cart value not met for this coupon."
 
-        # If applicable_products is empty => applies to all products.
         restricted = self.applicable_products.exists()
         if restricted:
             product_ids = set(cart.items.values_list("product_id", flat=True))
@@ -165,7 +148,6 @@ class Coupon(TimestampedModel):
         subtotal = cart.subtotal()
 
         if self.discount_type == self.DiscountType.PERCENTAGE:
-            # discount_value = percent (e.g. 10 => 10%)
             pct = (self.discount_value / Decimal("100")).quantize(Decimal("0.0001"))
             return (subtotal * pct).quantize(Decimal("0.01"))
 
@@ -173,12 +155,6 @@ class Coupon(TimestampedModel):
 
 
 class Cart(TimestampedModel):
-    """
-    Supports both:
-    - Authenticated carts (user is set)
-    - Guest carts (guest_token is set)
-    """
-
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, blank=True, null=True, related_name="carts"
     )
@@ -206,6 +182,7 @@ class CartItem(TimestampedModel):
 
     class Meta:
         unique_together = [("cart", "product")]
+        ordering = ["id"]
 
     def __str__(self) -> str:
         return f"{self.product} x {self.quantity}"
@@ -273,7 +250,6 @@ def create_order_from_cart(
     if total < 0:
         total = Decimal("0.00")
 
-    # Stock validation and decrement
     for item in cart.items.select_related("product").select_for_update():
         if item.quantity > item.product.stock_quantity:
             raise ValueError(f"Insufficient stock for {item.product.name}.")

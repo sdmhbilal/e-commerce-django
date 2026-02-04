@@ -42,7 +42,14 @@
       background: rgba(255,255,255,.1);
       color: #fff !important;
     }
-    .dashboard-nav .navbar-text { font-weight: 500; color: rgba(255,255,255,.9) !important; }
+    .dashboard-nav .navbar-nav { align-items: center; }
+    .dashboard-nav .navbar-text {
+      font-weight: 500;
+      color: rgba(255,255,255,.9) !important;
+      padding: 0.5rem 0.75rem !important;
+      margin: 0;
+      display: inline-block;
+    }
     .dashboard-main { padding: 1.5rem 0 3rem; }
     .dashboard-card {
       background: #fff;
@@ -239,7 +246,7 @@
 
   <main class="container dashboard-main">
     {% for message in messages %}
-      <div class="alert alert-{{ message.tags }} alert-dashboard alert-dismissible fade show" role="alert">
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dashboard alert-dismissible fade show" role="alert">
         {{ message }}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>

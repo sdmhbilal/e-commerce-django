@@ -15,12 +15,20 @@ Django + Django REST Framework backend for a full-stack e-commerce platform. Pro
 
 ```
 config/           # Django project (settings, urls, asgi, wsgi)
-shop/             # Main app: models, API, serializers
-dashboard/        # Admin dashboard app: staff-only views and templates
+shop/
+  constants.py    # Headers, settings keys, defaults
+  services.py     # Email sending, get_min_order_amount, get_otp_expire_minutes
+  api.py          # REST API views
+  models.py       # Cart, Order, Product, etc.
+  serializers.py
+  urls.py
+dashboard/        # Admin dashboard: staff-only views and templates
 templates/        # Jinja2 templates for dashboard
 manage.py
+requirements.txt   # pip install -r requirements.txt
 .env.example      # Copy to .env and fill in values
 ```
+(db.sqlite3 and media/ are created at runtime and are in .gitignore; do not commit them.)
 
 ### Why Some Files Exist (Do Not Remove)
 
@@ -43,10 +51,8 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ### 2. Install dependencies
 
 ```bash
-pip install django djangorestframework django-cors-headers psycopg2-binary python-dotenv
+pip install -r requirements.txt
 ```
-
-(Adjust if you use a `requirements.txt`.)
 
 ### 3. Environment
 
@@ -71,6 +77,8 @@ python manage.py migrate
 python manage.py createsuperuser   # Staff user for dashboard and Django admin
 ```
 
+If you see "unapplied migration(s)", run `python manage.py migrate` from the project root and restart the server.
+
 ### 5. Run
 
 ```bash
@@ -78,8 +86,8 @@ python manage.py runserver
 ```
 
 - **API base:** `http://localhost:8000/api/`
-- **E‑commerce admin dashboard (assignment’s admin):** `http://localhost:8000/dashboard/` — use this for products, orders, coupons (Jinja templates; staff login).
-- **Django built‑in admin:** `http://localhost:8000/admin/` — optional; not the assignment’s admin. See **DASHBOARD_ACCESS.md** for exact dashboard URLs (add product, orders, coupons).
+- **E‑commerce admin dashboard:** `http://localhost:8000/dashboard/` — products, orders, coupons (Jinja templates; staff login). Use this, not Django’s `/admin/`.
+- **Django built‑in admin:** `http://localhost:8000/admin/` — optional.
 
 ### Accessing admin (first time)
 
@@ -100,12 +108,10 @@ If you used the one-time setup script that created a default superuser, use **us
 
 ## Admin Dashboard
 
-- **URL:** `/dashboard/`
-- **Login:** Staff users only. After login you see:
-  - **Products** — list, create, edit, delete
-  - **Coupons** — list, create, edit, toggle enabled
-  - **Orders** — list (with status filter), detail, update status
-- **Navbar:** Products, Coupons, and Orders links are shown only when you are logged in. When not logged in, the brand links to the login page and a “Login” link is shown.
+- **Login:** http://localhost:8000/dashboard/login/ — staff only (default: `admin` / `admin123`; change in production).
+- **After login:** Products (list, create, edit, delete), Coupons (list, create, edit, toggle), Orders (list, detail, update status). Navbar shows these when logged in.
+- **Quick links:** Home `/dashboard/`, Products `/dashboard/products/`, Add product `/dashboard/products/create/`, Orders `/dashboard/orders/`, Coupons `/dashboard/coupons/`, Logout `/dashboard/logout/`.
+- **Email (OTP, order confirmation):** By default emails are printed in the terminal (console backend). For real sending, set in `.env`: `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`. Optional: `OTP_EXPIRE_MINUTES=15`.
 
 ## API Overview
 

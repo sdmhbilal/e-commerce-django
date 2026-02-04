@@ -4,34 +4,76 @@
   <div class="page-header flex-wrap">
     <h1>{{ title }}</h1>
     <div class="d-flex flex-wrap gap-2">
-      {% if form.instance.pk %}
-        <a href="{% url 'dashboard:product_images' form.instance.pk %}" class="btn btn-dash-outline">Manage images</a>
-      {% endif %}
       <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
     </div>
   </div>
-  <div class="dashboard-card">
+  <div class="dashboard-card product-form-card">
     <div class="card-body">
-      <form method="post" enctype="multipart/form-data" class="dashboard-form" id="product-form">
+      <form method="post" enctype="multipart/form-data" class="dashboard-form product-form-improved" id="product-form">
         {% csrf_token %}
-        {{ form.as_p }}
-        <div class="mb-4" id="image-preview-wrap">
-          <label class="form-label fw-500">Image preview</label>
-          <p class="small text-muted mb-2">Select an image above to see a preview. Accepted: JPG, PNG, GIF, WebP.</p>
-          <div class="d-flex align-items-start gap-3 flex-wrap">
-            {% if form.instance.pk and form.instance.get_cover_image %}
-              <div class="existing-image" id="existing-image-wrap">
-                <p class="small text-muted mb-1">Current cover</p>
-                <img src="{{ form.instance.get_cover_image.url }}" alt="Current cover" class="img-thumbnail dash-product-thumb" id="existing-image">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-4">
+          <div class="col-lg-7">
+            <div class="form-group-dash mb-4">
+              <label for="id_name" class="form-label-dash">Name</label>
+              {{ form.name }}
+              {% if form.name.errors %}<ul class="errorlist">{% for e in form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="form-group-dash mb-4">
+              <label for="id_short_description" class="form-label-dash">Short description</label>
+              {{ form.short_description }}
+              {% if form.short_description.errors %}<ul class="errorlist">{% for e in form.short_description.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="form-group-dash mb-4">
+              <label for="id_price" class="form-label-dash">Price ($)</label>
+              {{ form.price }}
+              <span class="form-hint">Min: 0</span>
+              {% if form.price.errors %}<ul class="errorlist">{% for e in form.price.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="form-group-dash mb-4">
+              <label for="id_stock_quantity" class="form-label-dash">Stock quantity</label>
+              {{ form.stock_quantity }}
+              <span class="form-hint">Units in stock. Min: 0</span>
+              {% if form.stock_quantity.errors %}<ul class="errorlist">{% for e in form.stock_quantity.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="form-group-dash mb-4">
+              <label class="form-label-dash d-block mb-2">Is active</label>
+              <label class="dash-switch">
+                {{ form.is_active }}
+                <span class="dash-switch-slider"></span>
+                <span class="dash-switch-label">Show this product in the store</span>
+              </label>
+              {% if form.is_active.errors %}<ul class="errorlist">{% for e in form.is_active.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="form-group-dash mb-4 image-upload-group">
+              <label for="id_image" class="form-label-dash">Image</label>
+              <div class="dash-file-wrap">
+                <input type="file" name="image" accept="image/*" id="id_image" class="dash-file-input">
+                <button type="button" class="btn btn-dash-outline dash-file-btn" id="file-trigger">Choose file</button>
+                <span class="dash-file-name" id="file-name">No file chosen</span>
               </div>
-            {% endif %}
-            <div id="new-preview-wrap" style="display: none;">
-              <p class="small text-muted mb-1">New image</p>
-              <img id="image-preview" src="" alt="Preview" class="img-thumbnail dash-product-thumb">
+              <span class="form-hint">JPG, PNG, GIF, WebP</span>
+              {% if form.image.errors %}<ul class="errorlist">{% for e in form.image.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+              <div class="dash-preview-area mt-3" id="image-preview-area">
+                {% if form.instance.pk and form.instance.get_cover_image %}
+                  <div class="existing-image" id="existing-image-wrap">
+                    <img src="{{ form.instance.get_cover_image.url }}" alt="Current image" class="dash-preview-img" id="existing-image">
+                  </div>
+                {% endif %}
+                <div id="new-preview-wrap" class="dash-preview-box" style="display: none;">
+                  <img id="image-preview" src="" alt="Preview" class="dash-preview-img">
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
+
+        <div class="form-actions">
           <button class="btn btn-dash-primary" type="submit">Save</button>
           <a href="{% url 'dashboard:product_list' %}" class="btn btn-dash-outline">Cancel</a>
         </div>
@@ -40,28 +82,154 @@
   </div>
 {% endblock %}
 
+{% block extra_css %}
+  <style>
+    .product-form-card .card-body { padding: 1.75rem; }
+    .product-form-improved .form-label-dash {
+      display: block;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #334155;
+      margin-bottom: 0.5rem;
+    }
+    .product-form-improved .form-group-dash input[type="text"],
+    .product-form-improved .form-group-dash input[type="number"],
+    .product-form-improved .form-group-dash textarea {
+      width: 100%;
+      padding: 0.625rem 0.875rem;
+      font-size: 0.9375rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .product-form-improved .form-group-dash input:focus,
+    .product-form-improved .form-group-dash textarea:focus {
+      outline: none;
+      border-color: var(--dash-primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+    .product-form-improved .form-hint {
+      display: block;
+      font-size: 0.8125rem;
+      color: #64748b;
+      margin-top: 0.375rem;
+    }
+    .product-form-improved .form-group-dash .errorlist { list-style: none; padding: 0; margin: 0.25rem 0 0; font-size: 0.8125rem; color: #dc2626; }
+
+    .dash-file-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .dash-file-input {
+      position: absolute;
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      z-index: -1;
+    }
+    .dash-file-btn { flex-shrink: 0; }
+    .dash-file-name {
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+    .dash-file-name.has-file { color: #334155; font-weight: 500; }
+    .dash-preview-area { min-height: 0; }
+    .dash-preview-box, .existing-image { display: inline-block; }
+    .dash-preview-img {
+      max-width: 200px;
+      max-height: 200px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .image-upload-group .existing-image img,
+    .image-upload-group #new-preview-wrap img { display: block; }
+
+    .dash-switch {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dash-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .dash-switch-slider {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      background: #cbd5e1;
+      border-radius: 24px;
+      transition: background .2s;
+      flex-shrink: 0;
+    }
+    .dash-switch-slider::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform .2s;
+    }
+    .dash-switch input:checked + .dash-switch-slider { background: var(--dash-primary); }
+    .dash-switch input:checked + .dash-switch-slider::after { transform: translateX(20px); }
+    .dash-switch-label { font-size: 0.875rem; color: #475569; }
+
+    .product-form-improved .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      padding-top: 1.5rem;
+      margin-top: 1.5rem;
+      border-top: 1px solid #e2e8f0;
+    }
+  </style>
+{% endblock %}
+
 {% block extra_js %}
   <script>
     (function() {
-      var input = document.querySelector('input[name=image]');
+      var input = document.getElementById('id_image');
+      var trigger = document.getElementById('file-trigger');
+      var fileNameEl = document.getElementById('file-name');
       var newWrap = document.getElementById('new-preview-wrap');
       var newImg = document.getElementById('image-preview');
-      var existingImg = document.getElementById('existing-image');
-      if (!input) return;
-      input.addEventListener('change', function(e) {
-        var file = e.target.files[0];
-        if (file && file.type.indexOf('image/') === 0) {
-          newImg.src = URL.createObjectURL(file);
-          newWrap.style.display = 'block';
-          var wrap = document.getElementById('existing-image-wrap');
-          if (wrap) wrap.style.display = 'none';
-        } else {
-          newWrap.style.display = 'none';
-          newImg.src = '';
-          var wrap = document.getElementById('existing-image-wrap');
-          if (wrap) wrap.style.display = 'block';
-        }
-      });
+      var existingWrap = document.getElementById('existing-image-wrap');
+      if (trigger && input) trigger.addEventListener('click', function() { input.click(); });
+      if (input) {
+        input.addEventListener('change', function(e) {
+          var file = e.target.files[0];
+          if (fileNameEl) {
+            fileNameEl.textContent = file ? file.name : 'No file chosen';
+            fileNameEl.classList.toggle('has-file', !!file);
+          }
+          if (file && file.type.indexOf('image/') === 0) {
+            if (newImg) newImg.src = URL.createObjectURL(file);
+            if (newWrap) newWrap.style.display = 'inline-block';
+            if (existingWrap) existingWrap.style.display = 'none';
+          } else {
+            if (newWrap) newWrap.style.display = 'none';
+            if (newImg) newImg.src = '';
+            if (existingWrap) existingWrap.style.display = 'inline-block';
+          }
+        });
+      }
     })();
   </script>
 {% endblock %}

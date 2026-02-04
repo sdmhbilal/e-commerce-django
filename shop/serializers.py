@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from shop.models import Cart, CartItem, Coupon, Order, OrderItem, Product, ProductImage
+from shop.models import Cart, CartItem, Coupon, Order, OrderItem, Product
 
 User = get_user_model()
 
@@ -72,20 +72,8 @@ def _build_image_url(request, image_field):
     return request.build_absolute_uri(url) if request else url
 
 
-class ProductImageSerializer(serializers.Serializer):
-    id = serializers.IntegerField(read_only=True)
-    image_url = serializers.SerializerMethodField()
-    is_cover = serializers.BooleanField(read_only=True)
-    order = serializers.IntegerField(read_only=True)
-
-    def get_image_url(self, obj):
-        request = self.context.get("request")
-        return _build_image_url(request, obj.image if hasattr(obj, "image") else None)
-
-
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
     in_stock = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -98,28 +86,11 @@ class ProductSerializer(serializers.ModelSerializer):
             "stock_quantity",
             "in_stock",
             "image_url",
-            "images",
         ]
 
     def get_image_url(self, obj: Product):
-        """Cover image URL: from ProductImage (cover or first) or legacy Product.image."""
         request = self.context.get("request")
-        cover_image = obj.get_cover_image()
-        return _build_image_url(request, cover_image)
-
-    def get_images(self, obj: Product):
-        """All product images (cover + others) for buyer to view."""
-        qs = obj.images.all()
-        if not qs.exists() and obj.image:
-            return [
-                {
-                    "id": 0,
-                    "image_url": _build_image_url(self.context.get("request"), obj.image),
-                    "is_cover": True,
-                    "order": 0,
-                }
-            ]
-        return ProductImageSerializer(qs, many=True, context=self.context).data
+        return _build_image_url(request, obj.image)
 
 
 class CartItemSerializer(serializers.ModelSerializer):
