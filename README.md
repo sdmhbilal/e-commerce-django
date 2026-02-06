@@ -1,10 +1,10 @@
 # E-Commerce Backend
 
-Django + DRF backend: REST API for products, cart, coupons, orders; staff dashboard for management.
+**Project overview:** Django + DRF backend: REST API for products, cart, coupons, orders; staff dashboard for management.
 
-**Tech stack:** Python, Django 6, Django REST Framework, PostgreSQL (or SQLite), Jinja2, Bootstrap 5.
+**Tech stack:** Python 3, Django 4.2–6.x, Django REST Framework 3.14+, PostgreSQL (or SQLite), Jinja2, Bootstrap 5, Gunicorn. See `requirements.txt` for exact versions.
 
-## Setup
+## Setup instructions
 
 ```bash
 cd e-commerce-backend
@@ -20,7 +20,7 @@ python manage.py runserver
 - API: `http://localhost:8000/api/`
 - Dashboard: `http://localhost:8000/dashboard/`
 
-## API (basic)
+## API documentation (basic)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
