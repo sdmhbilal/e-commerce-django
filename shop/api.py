@@ -12,6 +12,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 
 from shop.constants import CART_TOKEN_HEADER, CART_TOKEN_QUERY_PARAM
 from shop.models import (
@@ -33,7 +34,9 @@ from shop.services import (
     send_otp_email,
 )
 from shop.serializers import (
+    AvatarUploadSerializer,
     CartItemSerializer,
+    CartItemUpdateSerializer,
     CartSerializer,
     CouponValidateSerializer,
     CouponValidationResultSerializer,
@@ -118,6 +121,7 @@ def _profile_response(user, request=None):
     return data
 
 
+@extend_schema(request=RegisterSerializer, responses={201: None})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
@@ -146,6 +150,7 @@ def register(request):
     }, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(request=VerifyEmailSerializer, responses={200: None})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_email(request):
@@ -172,6 +177,7 @@ def verify_email(request):
     return Response({"token": token.key})
 
 
+@extend_schema(request=LoginSerializer, responses={200: None})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login(request):
@@ -212,6 +218,7 @@ def cart_detail(request):
     return Response(CartSerializer(cart, context={"request": request}).data)
 
 
+@extend_schema(request=CartItemSerializer, responses={200: CartSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @transaction.atomic
@@ -239,6 +246,7 @@ def cart_item_add(request):
     return Response(CartSerializer(cart, context={"request": request}).data, status=status.HTTP_200_OK)
 
 
+@extend_schema(request=CartItemUpdateSerializer, responses={200: CartSerializer})
 @api_view(["PATCH"])
 @permission_classes([AllowAny])
 @transaction.atomic
@@ -275,6 +283,7 @@ def cart_item_delete(request, item_id: int):
     return Response(CartSerializer(cart, context={"request": request}).data)
 
 
+@extend_schema(request=CouponValidateSerializer, responses={200: CouponValidationResultSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def coupon_validate(request):
@@ -320,6 +329,7 @@ def order_list(request):
     )
 
 
+@extend_schema(request=OrderCreateSerializer, responses={201: OrderSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def order_create(request):
@@ -361,6 +371,7 @@ def me(request):
     return Response(_profile_response(request.user, request))
 
 
+@extend_schema(request=ProfileUpdateSerializer, responses={200: None})
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def profile_update(request):
@@ -399,6 +410,7 @@ def profile_update(request):
     return Response(_profile_response(user, request))
 
 
+@extend_schema(request=VerifyEmailChangeSerializer, responses={200: None})
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def verify_email_change(request):
@@ -427,6 +439,7 @@ def verify_email_change(request):
     return Response(_profile_response(user, request))
 
 
+@extend_schema(request=AvatarUploadSerializer, responses={200: None})
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def profile_avatar_upload(request):

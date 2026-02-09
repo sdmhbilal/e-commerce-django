@@ -19,6 +19,7 @@ python manage.py runserver
 
 - API: `http://localhost:8000/api/`
 - Dashboard: `http://localhost:8000/dashboard/`
+- **Swagger UI:** `http://localhost:8000/api/docs/` (interactive API docs). OpenAPI schema: `http://localhost:8000/api/schema/`
 
 ## API documentation (basic)
 

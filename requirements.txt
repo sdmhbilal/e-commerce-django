@@ -6,3 +6,4 @@ psycopg2-binary>=2.9
 Jinja2>=3.1
 Pillow>=10.0
 gunicorn>=21.0
+drf-spectacular>=0.27

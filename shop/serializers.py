@@ -60,6 +60,10 @@ class ProfileUpdateSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_blank=True)
 
 
+class AvatarUploadSerializer(serializers.Serializer):
+    avatar = serializers.ImageField(help_text="Image file for profile avatar")
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
@@ -103,6 +107,10 @@ class CartItemSerializer(serializers.ModelSerializer):
         model = CartItem
         fields = ["id", "product", "product_id", "quantity", "unit_price", "created_at", "updated_at"]
         read_only_fields = ["unit_price", "created_at", "updated_at"]
+
+
+class CartItemUpdateSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=1)
 
 
 class CartSerializer(serializers.ModelSerializer):
